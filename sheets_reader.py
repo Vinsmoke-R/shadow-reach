@@ -13,7 +13,7 @@ SCOPES = [
 SHEET_ID = os.getenv('SHEET_ID')
 RANGE = "3000+ HR's with Profiles - Weekly Updates!A:D" 
 
-def get_service():
+def read_sheet():
     creds = None
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
@@ -25,7 +25,7 @@ def get_service():
             t.write(creds.to_json())
     return build('sheets', 'v4', credentials=creds)
 
-service = get_service()
+service = read_sheet()
 sheet = service.spreadsheets()
 result = sheet.values().get(
     spreadsheetId=SHEET_ID, range=RANGE).execute()
