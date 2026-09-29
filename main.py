@@ -15,6 +15,7 @@ from sheets_reader import read_sheet
 from data_extract import extract_from_document, extract_resume_data
 from llm import draft_mail
 from sheets_reader import SHEET_ID, RANGE
+from gmail_reader import send_mail
 
 
 llm = ChatGroq(
@@ -53,8 +54,15 @@ def extract_data(state: AgentState):
 
 
 def draft_mails(state: AgentState):
+
     for contact in state['contacts']:
-        for i in range(1,5):
+
+        contact = ({
+            "name" : None ,
+            "email" : contact['Email'],
+            "company": contact['Company Name']
+        })
+        for i in range(1,5):        # max 5 retries
             email = draft_mail(contact, state['resume_data'])
 
             print(f"\n📧 Draft for {contact['name']} at {contact['company']}:")
@@ -73,8 +81,19 @@ def draft_mails(state: AgentState):
             if decision == "approve":
                 print(f"✅ Approved for {contact['name']}")
                 # mail 
-                send_mail()
-                break                    # move to next contact
+                # contact = ({
+                #     "name" : None ,
+                #     "email" : contact['Email'],
+                #     "company": contact['Company Name']
+                # })
+                send_mail(
+                    to=state['contacts']['email'],
+                    subject="Applying for AI intern role",
+                    body=draft_mail(contact, state['resume_data']),
+                    attachment_bytes=state['resume_bytes'],
+                    filename="resume.pdf",
+                )
+                break   # move to next contact
             
             elif decision == "rewrite":
                 print(f"🔄 Rewriting for {contact['name']}...")
@@ -86,14 +105,46 @@ def draft_mails(state: AgentState):
 
 
 
-graph = StateGraph()
+graph = StateGraph(AgentState)
 graph.add_node("load_resume", load_resume)
 graph.add_node("extract_data", extract_data)
 graph.add_node("draft", draft_mails)
 # graph.add_node("human_review", human_review)
 
-graph.add_edge(START,load_resume)
-graph.add_edge(load_resume,extract_data)
-graph.add_edge(draft_mails)
+graph.add_edge(START,"load_resume")
+graph.add_edge("load_resume","extract_data")
+graph.add_edge("extract_data", "draft")
+graph.add_edge("draft", END)
 
-graph.compile()
+memory = MemorySaver()
+cold_reach = graph.compile(checkpointer = memory)
+
+
+
+#invoke the graph 
+if __name__ == "__main__":
+
+    with open("resume.pdf", "rb") as f:
+        resume_bytes = f.read()
+
+    initial_state = {
+        "resume_bytes": resume_bytes,
+        "resume_data": {},
+        "doc_bytes": None,
+        "file_type": None,
+        "contacts": [],
+        "sent_count": 0
+    }
+
+    config = {
+        "configurable": {
+            "thread_id": "cold-reach-1"
+        }
+    }
+
+    result = cold_reach.invoke(
+        initial_state,
+        config=config
+    )
+
+    print(result)

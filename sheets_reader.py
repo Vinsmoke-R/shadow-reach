@@ -8,10 +8,13 @@ load_dotenv()
 
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets.readonly',
-    'https://www.googleapis.com/auth/gmail.send'
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly'  # ← add this
 ]
+
 SHEET_ID = os.getenv('SHEET_ID')
-RANGE = "3000+ HR's with Profiles - Weekly Updates!A:D" 
+# RANGE = "3000+ HR's with Profiles - Weekly Updates!A:D" 
+RANGE = "Sheet1!A:D"
 
 def read_sheet():
     creds = None

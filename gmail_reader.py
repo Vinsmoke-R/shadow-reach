@@ -54,12 +54,13 @@ results = service.users().messages().list(
 for msg in results.get('messages', []):
     print(msg['id'])
 
-with open("resume.pdf", "rb") as f:
-    resume_bytes = f.read()
-send_mail(
-    to="rajy2972@gmail.com",
-    subject="Applying for AI intern role",
-    body="Hi,\n\nPlease find my resume attached.\n\nThanks,\nYour Name",
-    attachment_bytes=resume_bytes,
-    filename="resume.pdf",
-)
+# with open("resume.pdf", "rb") as f:
+#     resume_bytes = f.read()
+
+# send_mail(
+#     to="rajy2972@gmail.com",
+#     subject="Applying for AI intern role",
+#     body="Hi,\n\nPlease find my resume attached.\n\nThanks,\nYour Name",
+#     attachment_bytes=resume_bytes,
+#     filename="resume.pdf",
+# )
