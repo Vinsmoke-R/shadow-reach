@@ -1,4 +1,4 @@
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_groq import ChatGroq
@@ -32,9 +32,9 @@ class AgentState(TypedDict):
     # approved: bool             # human approved sending?
     sent_count: int            # how many emails sent
 
-@tool
-def send_mail():
-    pass
+# @tool
+# def send_mail():
+#     pass
 
 def load_resume(state: AgentState):
     resume = extract_resume_data(state['resume_bytes'])
@@ -53,9 +53,39 @@ def extract_data(state: AgentState):
         contacts = extract_from_document(state['doc_bytes'], state['file_type'])
         return {"contacts":contacts}
 
+
 def draft_mails(state: AgentState):
     for contact in state['contacts']:
-        draft_mail(contact, state['resume_data'])
+        for i in range(1,5):
+            email = draft_mail(contact, state['resume_data'])
+
+            print(f"\n📧 Draft for {contact['name']} at {contact['company']}:")
+            print("-" * 40)
+            print(email)
+            print("-" * 40)
+
+            #Human in the loop
+            decision = interrupt({
+                "message" : "What do you think of this draft",
+                "email_body" : email,
+                "contact" : contact,
+                "options": ["approve", "rewrite", "skip"]
+            })
+
+            if decision == "approve":
+                print(f"✅ Approved for {contact['name']}")
+                # mail 
+                send_mail()
+                break                    # move to next contact
+            
+            elif decision == "rewrite":
+                print(f"🔄 Rewriting for {contact['name']}...")
+                continue                 # loop again → LLM rewrites
+            
+            elif decision == "skip":
+                print(f"⏭️  Skipping {contact['name']}")
+                break
+
 
 
 graph = StateGraph()
@@ -63,3 +93,9 @@ graph.add_node("load_resume", load_resume)
 graph.add_node("extract_data", extract_data)
 graph.add_node("draft", draft_mails)
 # graph.add_node("human_review", human_review)
+
+graph.add_edge(START,load_resume)
+graph.add_edge(load_resume,extract_data)
+graph.add_edge(draft_mails)
+
+graph.compile()
