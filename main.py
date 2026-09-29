@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 from dotenv import load_dotenv
 import os
 
+
 load_dotenv()
 
 from sheets_reader import read_sheet
@@ -32,9 +33,6 @@ class AgentState(TypedDict):
     # approved: bool             # human approved sending?
     sent_count: int            # how many emails sent
 
-# @tool
-# def send_mail():
-#     pass
 
 def load_resume(state: AgentState):
     resume = extract_resume_data(state['resume_bytes'])
