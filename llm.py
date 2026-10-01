@@ -11,9 +11,9 @@ class Contact(BaseModel):
 load_dotenv()
 
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile",  # better writing quality
-    temperature=0.7,   # bit of creativity for natural emails
-    max_tokens=2000,
+    model="openai/gpt-oss-120b",  # current and reliable
+    temperature=0,
+    max_tokens = 2000,
 )
 
 def draft_mail(contact: Contact, resume_data: dict):

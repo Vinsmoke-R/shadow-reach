@@ -13,7 +13,7 @@ load_dotenv()
 
 from sheets_reader import read_sheet
 from data_extract import extract_from_document, extract_resume_data
-from llm import draft_mail
+from llm import draft_mail, Contact
 from sheets_reader import SHEET_ID, RANGE
 from gmail_reader import send_mail
 
@@ -54,18 +54,23 @@ def extract_data(state: AgentState):
 
 
 def draft_mails(state: AgentState):
+    sent = 0
+    for row in state['contacts'][1:]:
 
-    for contact in state['contacts']:
+        contact = Contact(
+            name =    row[0] if len(row) > 0 else "HR",
+            email =   row[2] if len(row) > 2 else None,   # use index not key (we are not using key cuz read_sheet return list not dict)
+            company = row[1] if len(row) > 1 else "Company"
+        )
+        # contact is a dict now 
+        if not contact.email:
+            print(f"⚠️ Skipping {contact['name']} — no email found")
+            continue
 
-        contact = ({
-            "name" : None ,
-            "email" : contact['Email'],
-            "company": contact['Company Name']
-        })
         for i in range(1,5):        # max 5 retries
             email = draft_mail(contact, state['resume_data'])
 
-            print(f"\n📧 Draft for {contact['name']} at {contact['company']}:")
+            print(f"\n📧 Draft for {contact.name} at {contact.company}:")
             print("-" * 40)
             print(email)
             print("-" * 40)
@@ -79,29 +84,26 @@ def draft_mails(state: AgentState):
             })
 
             if decision == "approve":
-                print(f"✅ Approved for {contact['name']}")
+                print(f"✅ Approved for {contact.name}")
                 # mail 
-                # contact = ({
-                #     "name" : None ,
-                #     "email" : contact['Email'],
-                #     "company": contact['Company Name']
-                # })
                 send_mail(
-                    to=state['contacts']['email'],
-                    subject="Applying for AI intern role",
-                    body=draft_mail(contact, state['resume_data']),
+                    to=contact['email'],              # ✅ fixed — was state['contacts']['email']
+                    subject="Applying for AI Intern Role",
+                    body=email,                       # ✅ reuse drafted email, don't redraft
                     attachment_bytes=state['resume_bytes'],
                     filename="resume.pdf",
                 )
+                sent += 1
                 break   # move to next contact
             
             elif decision == "rewrite":
-                print(f"🔄 Rewriting for {contact['name']}...")
+                print(f"🔄 Rewriting for {contact.name}...")
                 continue                 # loop again → LLM rewrites
             
             elif decision == "skip":
-                print(f"⏭️  Skipping {contact['name']}")
+                print(f"⏭️  Skipping {contact.name}")
                 break
+    return {"sent_count" : sent}
 
 
 
