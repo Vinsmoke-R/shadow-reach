@@ -28,6 +28,7 @@ llm = ChatGroq(
 class AgentState(TypedDict):
     resume_bytes: bytes        # raw resume PDF
     resume_data: dict          # extracted resume details
+    sheet_id = Optional[str]
     doc_bytes: Optional[bytes] # uploaded HR doc (optional)
     file_type: Optional[str]   # pdf/png/jpg
     contacts: List[dict]       # extracted HR contacts
@@ -40,13 +41,8 @@ def load_resume(state: AgentState):
     return {"resume_data": resume}   
 
 def extract_data(state: AgentState):
-    user_input = input("Please select your method").strip().lower()
-    if user_input == "sheets":
-        service = read_sheet()
-        sheet = service.spreadsheets()
-        result = sheet.values().get(
-            spreadsheetId=SHEET_ID, range=RANGE).execute()
-        rows = result.get('values', [])
+    if state['sheet_id']:
+        rows = read_sheet(state['sheet_id'])
         return {"contacts":rows}
     else:
         contacts = extract_from_document(state['doc_bytes'], state['file_type'])
