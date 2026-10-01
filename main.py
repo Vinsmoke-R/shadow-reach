@@ -56,13 +56,17 @@ def extract_data(state: AgentState):
 def draft_mails(state: AgentState):
     sent = 0
     for row in state['contacts'][1:]:
+        try:
 
-        contact = Contact(
-            name =    row[0] if len(row) > 0 else "HR",
-            email =   row[2] if len(row) > 2 else None,   # use index not key (we are not using key cuz read_sheet return list not dict)
-            company = row[1] if len(row) > 1 else "Company"
-        )
-        # contact is a dict now 
+            contact = Contact(
+                name =    row[0] if len(row) > 0 else "HR",
+                email =   row[2] if len(row) > 2 else None,   # use index not key (we are not using key cuz read_sheet return list not dict)
+                company = row[1] if len(row) > 1 else "Company"
+            )
+            # contact is a dict now 
+        except Exception:
+            print(f"⚠️ Skipping {row[0]} — invalid email: {row[2]}")
+            continue 
         if not contact.email:
             print(f"⚠️ Skipping {contact['name']} — no email found")
             continue
@@ -76,18 +80,19 @@ def draft_mails(state: AgentState):
             print("-" * 40)
 
             #Human in the loop
-            decision = interrupt({
-                "message" : "What do you think of this draft",
-                "email_body" : email,
-                "contact" : contact,
-                "options": ["approve", "rewrite", "skip"]
-            })
+            decision = input("Choose what do you want with this mail ?")
+            # decision = interrupt({
+            #     "message" : "What do you think of this draft",
+            #     "email_body" : email,
+            #     "contact" : contact,
+            #     "options": ["approve", "rewrite", "skip"]
+            # })
 
             if decision == "approve":
                 print(f"✅ Approved for {contact.name}")
                 # mail 
                 send_mail(
-                    to=contact['email'],              # ✅ fixed — was state['contacts']['email']
+                    to=contact.email,              # ✅ fixed — was state['contacts']['email']
                     subject="Applying for AI Intern Role",
                     body=email,                       # ✅ reuse drafted email, don't redraft
                     attachment_bytes=state['resume_bytes'],
