@@ -1,7 +1,10 @@
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 
 
 SCOPES = [
@@ -57,7 +60,7 @@ def read_sheet(sheet_id):
         .values()
         .get(
             spreadsheetId=sheet_id,
-            range="3000 HR's with Profiles - Weekly Updates!A:D"
+            range=f"'{os.getenv("RANGE")}'!A:D"
         )
         .execute()
     )

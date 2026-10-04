@@ -27,7 +27,7 @@ llm = ChatGroq(
 class AgentState(TypedDict):
     resume_bytes: bytes        # raw resume PDF
     resume_data: dict          # extracted resume details
-    sheet_id = Optional[str]
+    sheet_id : Optional[str]
     doc_bytes: Optional[bytes] # uploaded HR doc (optional)
     file_type: Optional[str]   # pdf/png/jpg
     contacts: List[dict]       # extracted HR contacts
@@ -62,9 +62,6 @@ def draft_mails(state: AgentState):
         except Exception:
             print(f"⚠️ Skipping {row[0]} — invalid email: {row[2]}")
             continue 
-        if not contact.email:
-            print(f"⚠️ Skipping {contact['name']} — no email found")
-            continue
 
         for i in range(1,5):        # max 5 retries
             email = draft_mail(contact, state['resume_data'])

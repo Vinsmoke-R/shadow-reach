@@ -46,7 +46,7 @@ async def start(resume: UploadFile = File(...)):
     initial_state = {
             "resume_bytes": resume_bytes,
             "resume_data": {},
-            "sheet_id":None,
+            "sheet_id": sessions.get("sheet_id", None),
             "doc_bytes": None,
             "file_type": None,
             "contacts": [],
