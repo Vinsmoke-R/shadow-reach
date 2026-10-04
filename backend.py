@@ -1,9 +1,11 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from langgraph.types import Command
 import uvicorn
 
 from sheets_reader import read_sheet
+from main import cold_reach
 
 app = FastAPI()
 
@@ -14,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-sessions = {}
+sessions = {}    # local session that we are going to use 
 
 # --- Request Models ---
 class SheetRequest(BaseModel):
@@ -41,29 +43,76 @@ def set_sheet(request: SheetRequest):
 async def start(resume: UploadFile = File(...)):
     resume_bytes = await resume.read()
     sessions["resume_bytes"] = resume_bytes
-    return {"message": "Resume uploaded, agent starting..."}
+    initial_state = {
+            "resume_bytes": resume_bytes,
+            "resume_data": {},
+            "sheet_id":None,
+            "doc_bytes": None,
+            "file_type": None,
+            "contacts": [],
+            "sent_count": 0
+        }
+    
+    config = {
+        "configurable": {
+            "thread_id": "cold-reach-1"
+        }
+    }
+    sessions["config"] = config   # storing config in session so that we can use same session it further 
+
+    cold_reach.invoke(
+        initial_state,
+        config=config
+    )
+
+    state = cold_reach.get_state(config)
+
+    # check if there are interrupts
+    if state.tasks and state.tasks[0].interrupts:
+        interrupt_data = state.tasks[0].interrupts[0].value
+        return {
+            "status": "paused",
+            "draft": interrupt_data["email_body"],
+            "contact": interrupt_data["contact"],
+            "options": interrupt_data["options"]
+        }
+
+    return {"status": "done", "sent_count": 0}
 
 # --- 4. Send decision ---
 @app.post("/decision")
 def decision(request: DecisionRequest):
+    config = sessions.get("config")   # get the same config that we were using 
 
-    choice = request.choice
+    if not config:
+        return {"error": "No active session. Please start first."}
 
-    if choice == "approve":
+    # resume graph with user decision
+    cold_reach.invoke(
+        Command(resume=request.choice),  # resume graph with user decision 
+        config=config
+    )
+
+    # get updated state
+    state = cold_reach.get_state(config)  # get current graph state
+
+    # check if done
+    if state.next == ():   # this means graph is finished 
+        sent = state.values.get("sent_count", 0)
         return {
-            "message": "Application approved"
+            "status": "done",
+            "sent_count": sent,
+            "message": f"All done! Sent to {sent} contacts."
         }
 
-    elif choice == "rewrite":
+    # get next interrupt
+    if state.tasks and state.tasks[0].interrupts:
+        interrupt_data = state.tasks[0].interrupts[0].value
         return {
-            "message": "Rewrite requested"
+            "status": "paused",
+            "draft": interrupt_data["email_body"],
+            "contact": interrupt_data["contact"],
+            "options": interrupt_data["options"]
         }
 
-    elif choice == "skip":
-        return {
-            "message": "Application skipped"
-        }
-
-    return {
-        "error": "Invalid choice"
-    }
+    return {"status": "done"}

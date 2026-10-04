@@ -57,7 +57,7 @@ def read_sheet(sheet_id):
         .values()
         .get(
             spreadsheetId=sheet_id,
-            range="Sheet1!A:D"
+            range="3000 HR's with Profiles - Weekly Updates!A:D"
         )
         .execute()
     )

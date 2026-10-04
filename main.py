@@ -14,7 +14,6 @@ load_dotenv()
 from sheets_reader import read_sheet
 from data_extract import extract_from_document, extract_resume_data
 from llm import draft_mail, Contact
-from sheets_reader import SHEET_ID, RANGE
 from gmail_reader import send_mail
 
 
@@ -38,7 +37,7 @@ class AgentState(TypedDict):
 
 def load_resume(state: AgentState):
     resume = extract_resume_data(state['resume_bytes'])
-    return {"resume_data": resume}   
+    return {"resume_data": resume}
 
 def extract_data(state: AgentState):
     if state['sheet_id']:
@@ -70,41 +69,31 @@ def draft_mails(state: AgentState):
         for i in range(1,5):        # max 5 retries
             email = draft_mail(contact, state['resume_data'])
 
-            print(f"\n📧 Draft for {contact.name} at {contact.company}:")
-            print("-" * 40)
-            print(email)
-            print("-" * 40)
-
-            #Human in the loop
-            decision = input("Choose what do you want with this mail ?")
-            # decision = interrupt({
-            #     "message" : "What do you think of this draft",
-            #     "email_body" : email,
-            #     "contact" : contact,
-            #     "options": ["approve", "rewrite", "skip"]
-            # })
+            #  interrupt — FastAPI will handle the decision
+            decision = interrupt({
+                "email_body": email,
+                "contact": contact.model_dump(),
+                "options": ["approve", "rewrite", "skip"]
+            })
 
             if decision == "approve":
-                print(f"✅ Approved for {contact.name}")
-                # mail 
                 send_mail(
-                    to=contact.email,              # ✅ fixed — was state['contacts']['email']
+                    to=contact.email,
                     subject="Applying for AI Intern Role",
-                    body=email,                       # ✅ reuse drafted email, don't redraft
+                    body=email,
                     attachment_bytes=state['resume_bytes'],
                     filename="resume.pdf",
                 )
                 sent += 1
-                break   # move to next contact
-            
-            elif decision == "rewrite":
-                print(f"🔄 Rewriting for {contact.name}...")
-                continue                 # loop again → LLM rewrites
-            
-            elif decision == "skip":
-                print(f"⏭️  Skipping {contact.name}")
                 break
-    return {"sent_count" : sent}
+
+            elif decision == "rewrite":
+                continue
+
+            elif decision == "skip":
+                break
+
+    return {"sent_count": sent}
 
 
 
@@ -125,29 +114,29 @@ cold_reach = graph.compile(checkpointer = memory)
 
 
 #invoke the graph 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    with open("resume.pdf", "rb") as f:
-        resume_bytes = f.read()
+#     with open("resume.pdf", "rb") as f:
+#         resume_bytes = f.read()
 
-    initial_state = {
-        "resume_bytes": resume_bytes,
-        "resume_data": {},
-        "doc_bytes": None,
-        "file_type": None,
-        "contacts": [],
-        "sent_count": 0
-    }
+#     initial_state = {
+#         "resume_bytes": resume_bytes,
+#         "resume_data": {},
+#         "doc_bytes": None,
+#         "file_type": None,
+#         "contacts": [],
+#         "sent_count": 0
+#     }
 
-    config = {
-        "configurable": {
-            "thread_id": "cold-reach-1"
-        }
-    }
+#     config = {
+#         "configurable": {
+#             "thread_id": "cold-reach-1"
+#         }
+#     }
 
-    result = cold_reach.invoke(
-        initial_state,
-        config=config
-    )
+#     result = cold_reach.invoke(
+#         initial_state,
+#         config=config
+#     )
 
-    print(result)
+#     print(result)

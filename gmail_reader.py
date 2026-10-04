@@ -48,17 +48,17 @@ def send_mail(to, subject, body, attachment_bytes=None, filename="resume.pdf"):
     )
 
 
-service = get_service()
-results = service.users().messages().list(
-    userId='me', maxResults=5).execute()
-for msg in results.get('messages', []):
-    print(msg['id'])
+# service = get_service()
+# results = service.users().messages().list(
+#     userId='me', maxResults=5).execute()
+# for msg in results.get('messages', []):
+#     print(msg['id'])
 
 # with open("resume.pdf", "rb") as f:
 #     resume_bytes = f.read()
 
 # send_mail(
-#     to="rajy2972@gmail.com",
+#     to="email@gmail.com",
 #     subject="Applying for AI intern role",
 #     body="Hi,\n\nPlease find my resume attached.\n\nThanks,\nYour Name",
 #     attachment_bytes=resume_bytes,
