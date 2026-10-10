@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+python-dotenv
+langgraph
+langchain-groq
+google-api-python-client
+google-auth-oauthlib
+PyMuPDF
