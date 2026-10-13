@@ -4,6 +4,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_groq import ChatGroq
 from typing import TypedDict, List, Optional
 from dotenv import load_dotenv
+from pydantic import ValidationError
 
 load_dotenv()
 
@@ -32,6 +33,7 @@ class AgentState(TypedDict):
     contacts: List[list]        # data rows only (header already removed)
     idx: int                    # which contact we're on
     current_contact: dict
+    col_map: dict   # {"name": 0, "company": 1, "email": 2}
     current_email: str
     decision: dict              # {"choice", "subject", "body"}
     sent_count: int
@@ -50,22 +52,47 @@ def extract_data(state: AgentState):
     print(f"Loaded {len(rows)} rows (including header):", rows)
     return {"contacts": rows[1:], "idx": 0}      # skip header once, here
 
+def detect_columns(header: list[str]) -> dict:
+    """Map 'email' / 'company' / 'name' to their column index using the header row."""
+    cols = {}
+    for idx, cell in enumerate(header):
+        h = cell.strip().lower()
+        if "mail" in h:
+            cols.setdefault("email", idx)
+        elif "company" in h or "organi" in h:      # check before 'name'
+            cols.setdefault("company", idx)
+        elif "name" in h:
+            cols.setdefault("name", idx)
+    return cols
+
+
+def get_cell(row: list[str], col) -> str | None:
+    # Sheets API drops trailing empty cells, so rows can be shorter than the header
+    if col is None or col >= len(row):
+        return None
+    return row[col].strip() or None
 
 def prepare_contact(state: AgentState):
-    rows, i = state["contacts"], state["idx"]
+    rows = state["contacts"]
+    cols = state.get("col_map") or detect_columns(rows[0])   # detect once, then reuse
+
+    if "email" not in cols:
+        raise ValueError(f"No email column found in header: {rows[0]}")
+
+    i = max(state["idx"], 1)          # row 0 is the header, so skip it
     while i < len(rows):
         row = rows[i]
         try:
             contact = Contact(
-                name=row[0] if len(row) > 0 else "HR",
-                company=row[1] if len(row) > 1 else "Company",
-                email=row[2] if len(row) > 2 else None,
+                name=get_cell(row, cols.get("name")) or "HR",
+                company=get_cell(row, cols.get("company")) or "your company",
+                email=get_cell(row, cols.get("email")),
             )
-            return {"idx": i, "current_contact": contact.model_dump()}
-        except Exception:
+            return {"idx": i, "col_map": cols, "current_contact": contact.model_dump()}
+        except ValidationError:
             print(f"Skipping row {i}: invalid contact {row}")
             i += 1
-    return {"idx": i}
+    return {"idx": i, "col_map": cols}
 
 
 def after_prepare(state: AgentState):
