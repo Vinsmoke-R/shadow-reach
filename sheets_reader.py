@@ -50,9 +50,10 @@ def get_sheets_service():
     )
 
 
-def read_sheet(sheet_id):
-
+def read_sheet(sheet_id: str, sheet_range: str):
     service = get_sheets_service()
+
+    sheet_range = sheet_range.strip()
 
     result = (
         service
@@ -60,7 +61,7 @@ def read_sheet(sheet_id):
         .values()
         .get(
             spreadsheetId=sheet_id,
-            range=f"'{os.getenv("RANGE")}'!A:D"
+            range=sheet_range + "!A:D",
         )
         .execute()
     )

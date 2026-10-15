@@ -5,6 +5,7 @@ from langchain_groq import ChatGroq
 from typing import TypedDict, List, Optional
 from dotenv import load_dotenv
 from pydantic import ValidationError
+import re
 
 load_dotenv()
 
@@ -28,6 +29,7 @@ class AgentState(TypedDict):
     resume_bytes: bytes
     resume_data: dict
     sheet_id: Optional[str]
+    sheet_range: Optional[str]
     doc_bytes: Optional[bytes]
     file_type: Optional[str]
     contacts: List[list]        # data rows only (header already removed)
@@ -45,41 +47,78 @@ def load_resume(state: AgentState):
 
 
 def extract_data(state: AgentState):
-    if state["sheet_id"]:
-        rows = read_sheet(state["sheet_id"])
+    if state.get("sheet_id") and state.get("sheet_range"):
+        rows = read_sheet(state["sheet_id"],state["sheet_range"])
     else:
         rows = extract_from_document(state["doc_bytes"], state["file_type"])
     print(f"Loaded {len(rows)} rows (including header):", rows)
-    return {"contacts": rows[1:], "idx": 0}      # skip header once, here
 
-def detect_columns(header: list[str]) -> dict:
-    """Map 'email' / 'company' / 'name' to their column index using the header row."""
+    header_idx, cols = find_header(rows)
+    # header and below that 
+    print(f"Header row: {header_idx}, columns: {cols}")
+
+    # return what is below the header 
+    return {
+        "contacts": rows[header_idx + 1:],   
+        "col_map": cols,
+        "idx": 0,
+    }
+
+EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+def looks_like_header(row: list[str]) -> dict:
+    """Return a col_map if this row looks like a header, else {}."""
+    cells = [str(c).strip() for c in row]
+
+    # a row containing real email addresses is data, not a header
+    if any(EMAIL_RE.fullmatch(c) for c in cells):
+        return {}
+
     cols = {}
-    for idx, cell in enumerate(header):
-        h = cell.strip().lower()
+    for idx, cell in enumerate(cells):
+        h = cell.lower()
+        if len(h) > 30:            # headers are short; instructions are long sentences
+            continue
         if "mail" in h:
             cols.setdefault("email", idx)
-        elif "company" in h or "organi" in h:      # check before 'name'
+        elif "company" in h or "organi" in h:
             cols.setdefault("company", idx)
         elif "name" in h:
             cols.setdefault("name", idx)
     return cols
 
 
+def find_header(rows: list[list[str]], scan: int = 10):
+    """Return (header_row_index, col_map). header_row_index is -1 if there is no header."""
+    best_idx, best_cols = -1, {}
+    for i, row in enumerate(rows[:scan]):
+        cols = looks_like_header(row)
+        if "email" in cols and len(cols) > len(best_cols):
+            best_idx, best_cols = i, cols
+    if best_cols:
+        return best_idx, best_cols
+
+    # no header: find the email column from the data itself
+    sample = rows[:50]
+    width = max((len(r) for r in sample), default=0)
+    hits = [
+        sum(1 for r in sample if c < len(r) and EMAIL_RE.fullmatch(str(r[c]).strip()))
+        for c in range(width)
+    ]
+    if hits and max(hits) > 0:
+        return -1, {"email": hits.index(max(hits))}
+
+    raise ValueError("Could not find an email column in the sheet")
+
+
 def get_cell(row: list[str], col) -> str | None:
-    # Sheets API drops trailing empty cells, so rows can be shorter than the header
     if col is None or col >= len(row):
         return None
-    return row[col].strip() or None
+    return str(row[col]).strip() or None
 
 def prepare_contact(state: AgentState):
-    rows = state["contacts"]
-    cols = state.get("col_map") or detect_columns(rows[0])   # detect once, then reuse
+    rows, cols, i = state["contacts"], state["col_map"], state["idx"]
 
-    if "email" not in cols:
-        raise ValueError(f"No email column found in header: {rows[0]}")
-
-    i = max(state["idx"], 1)          # row 0 is the header, so skip it
     while i < len(rows):
         row = rows[i]
         try:
@@ -88,11 +127,11 @@ def prepare_contact(state: AgentState):
                 company=get_cell(row, cols.get("company")) or "your company",
                 email=get_cell(row, cols.get("email")),
             )
-            return {"idx": i, "col_map": cols, "current_contact": contact.model_dump()}
+            return {"idx": i, "current_contact": contact.model_dump()}
         except ValidationError:
             print(f"Skipping row {i}: invalid contact {row}")
             i += 1
-    return {"idx": i, "col_map": cols}
+    return {"idx": i}
 
 
 def after_prepare(state: AgentState):

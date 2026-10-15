@@ -1,5 +1,6 @@
 import requests
 import streamlit as st
+import re
 
 API_URL = "http://localhost:8000"
 TIMEOUT = 180  # LLM drafting can be slow
@@ -10,7 +11,7 @@ st.set_page_config(page_title="Shadow Reach", page_icon="📧", layout="centered
 # State
 # ---------------------------------------------------------------------------
 DEFAULTS = {
-    "sheet_saved": False,
+    "saved_sheet": None,
     "phase": "idle",          # idle | review | done
     "thread_id": None,
     "contact": {},
@@ -79,6 +80,11 @@ def step_title(text: str):
         unsafe_allow_html=True,
     )
 
+def extract_sheet_id(user_input: str) -> str:
+    """Accept a full Google Sheets URL or a bare ID and return just the ID."""
+    match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", user_input)
+    return match.group(1) if match else user_input.strip()
+
 
 # ---------------------------------------------------------------------------
 # Header
@@ -87,22 +93,38 @@ st.title("📧 Shadow Reach")
 st.caption("AI cold email agent")
 
 # ---------------------------------------------------------------------------
-# Step 1 : Google sheet
+# Step 1 : Google sheet (ID + range)
 # ---------------------------------------------------------------------------
 with st.container(border=True):
-    step_title("Step 1 : Google sheet")
-    sheet_id = st.text_input(
-        "Google Sheet ID",
+    step_title("Step 1 : Google Sheet")
+    sheet_input = st.text_input(
+        "Google Sheet link or ID",
         key="sheet_id_input",
-        label_visibility="collapsed",
-        placeholder="Paste your Google Sheet ID",
+        placeholder="Paste your Google Sheet link or ID",
     )
-    if st.button("Save sheet", disabled=not sheet_id.strip(), use_container_width=True):
+    sheet_range = st.text_input(
+        "Range",
+        value="Sheet1!A:D",
+        key="sheet_range_input",
+        help="Tab name and columns, e.g. Sheet1!A:D. Use quotes if the tab name has spaces: 'HR List'!A:D",
+    )
+
+    sheet_id = extract_sheet_id(sheet_input)
+    current_sheet = {"sheet_id": sheet_id, "sheet_range": sheet_range.strip()}
+    is_sheet_saved = st.session_state.saved_sheet == current_sheet   # turns False automatically on any edit
+
+    if st.button(
+        "Save sheet",
+        disabled=not (sheet_id and sheet_range.strip()),
+        use_container_width=True,
+    ):
         with st.spinner("Saving..."):
-            data = call_api("POST", "/sheets", json={"sheet_id": sheet_id.strip()})
-        if data is not None:
-            st.session_state.sheet_saved = True
-    if st.session_state.sheet_saved:
+            response = call_api("POST", "/sheets", json=current_sheet)
+        if response is not None:
+            st.session_state.saved_sheet = current_sheet
+            st.rerun()
+
+    if is_sheet_saved:
         st.success("Sheet saved")
 
 # ---------------------------------------------------------------------------

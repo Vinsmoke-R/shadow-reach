@@ -22,7 +22,7 @@ sessions = {}    # holds the sheet_id between /sheets and /start
 # --- Request Models ---
 class SheetRequest(BaseModel):
     sheet_id: str
-
+    sheet_range: str
 
 class DecisionRequest(BaseModel):
     choice: str                       # approve / rewrite / skip
@@ -67,13 +67,14 @@ def root():
 @app.post("/sheets")
 def set_sheet(request: SheetRequest):
     sessions["sheet_id"] = request.sheet_id
-    return {"message": f"Sheet ID saved: {request.sheet_id}"}
+    sessions["sheet_range"] = request.sheet_range
+    return {"message": f"Sheet saved: {request.sheet_id} ({request.sheet_range})"}
 
 
 # --- 3. Upload resume + start agent ---
 @app.post("/start")
 async def start(resume: UploadFile = File(...)):
-    resume_bytes = await resume.read()
+    resume_bytes = resume.file.read()
     thread_id = str(uuid.uuid4())
     config = make_config(thread_id)
 
@@ -82,6 +83,7 @@ async def start(resume: UploadFile = File(...)):
             "resume_bytes": resume_bytes,
             "resume_data": {},
             "sheet_id": sessions.get("sheet_id"),
+            "sheet_range": sessions.get("sheet_range"),
             "doc_bytes": None,
             "file_type": None,
             "contacts": [],
